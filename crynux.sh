@@ -41,6 +41,6 @@ read -p "Run docker-compose up -d now? (y/N) " -n 1 -r
 echo
 
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-  docker-compose up -d
+  docker compose up -d
   echo "Crynux Node containers started in detached mode."
 fi
