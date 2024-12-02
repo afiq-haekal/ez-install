@@ -34,7 +34,7 @@ EOF
 # Display clear message about file creation and docker-compose command usage
 echo "docker-compose.yml file created successfully!"
 echo "To start the Docker containers in detached mode, run:"
-echo "docker-compose up -d"
+echo "docker compose up -d"
 
 # Optional: Prompt user to run the command
 read -p "Run docker-compose up -d now? (y/N) " -n 1 -r
