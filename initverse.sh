@@ -1,5 +1,19 @@
 #!/bin/bash
 
+# Fungsi untuk menjalankan miner
+run_miner() {
+    local wallet_address=$1
+    local worker_name=$2
+
+    while true; do
+        echo "Starting the miner with address: $wallet_address and worker: $worker_name"
+        ./iniminer-linux-x64 --pool stratum+tcp://${wallet_address}.${worker_name}@pool-core-testnet.inichain.com:32672
+        
+        echo "Miner stopped or crashed. Restarting in 5 seconds..."
+        sleep 5
+    done
+}
+
 # Prompt for wallet address
 echo "Please enter your wallet address (press Enter to use default: 0xDEAF249138363a20703E0FA7e10Dfb06039D168f):"
 read wallet_address
@@ -26,6 +40,5 @@ wget https://github.com/Project-InitVerse/miner/releases/download/v1.0.0/inimine
 echo "Setting executable permissions..."
 chmod +x iniminer-linux-x64
 
-# Run the miner
-echo "Starting the miner with address: $wallet_address and worker: $worker_name"
-./iniminer-linux-x64 --pool stratum+tcp://${wallet_address}.${worker_name}@pool-core-testnet.inichain.com:32672
+# Run the miner with auto-restart
+run_miner "$wallet_address" "$worker_name"
