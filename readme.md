@@ -14,7 +14,7 @@ wget https://raw.githubusercontent.com/afiq-haekal/ez-install/refs/heads/main/cr
 ```
 # Hyperspace
 ```
-wget https://raw.githubusercontent.com/afiq-haekal/ez-install/refs/heads/main/hyper.sh && bash hyper
+wget https://raw.githubusercontent.com/afiq-haekal/ez-install/refs/heads/main/hyper.sh && bash hyper.sh
 ```
 
 # note : bukan buat umum, kalo mau make pastiin addressnya ganti yh
