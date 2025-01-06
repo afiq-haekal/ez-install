@@ -27,15 +27,27 @@ check_status "Failed to update package list"
 sudo apt-get -y install cuda-toolkit-12-3
 check_status "Failed to install CUDA toolkit"
 
-# Set up CUDA environment variables
-echo 'export PATH=/usr/local/cuda-12.3/bin${PATH:+:${PATH}}' >> ~/.bashrc
-echo 'export LD_LIBRARY_PATH=/usr/local/cuda-12.3/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}' >> ~/.bashrc
-source ~/.bashrc
+# Set up CUDA environment variables correctly
+echo 'export PATH=/usr/local/cuda-12.3/bin:$PATH' >> ~/.bashrc
+echo 'export LD_LIBRARY_PATH=/usr/local/cuda-12.3/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+
+# Load the new environment variables immediately
+export PATH=/usr/local/cuda-12.3/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda-12.3/lib64:$LD_LIBRARY_PATH
+
+# Verify CUDA installation
+nvidia-smi
+check_status "Failed to detect NVIDIA GPU"
+
+nvcc --version
+check_status "Failed to detect CUDA compiler"
 
 # Install Hyperspace
 curl https://download.hyper.space/api/install | bash
 check_status "Failed to install Hyperspace"
-source /root/.bashrc
+
+# Source the updated environment
+source ~/.bashrc
 
 # Create screen session and start aios-cli
 screen -dmS hyperspace bash -c "aios-cli start"
