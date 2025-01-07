@@ -17,4 +17,9 @@ wget https://raw.githubusercontent.com/afiq-haekal/ez-install/refs/heads/main/cr
 wget https://raw.githubusercontent.com/afiq-haekal/ez-install/refs/heads/main/hyper.sh && bash hyper.sh
 ```
 
+# INFERA
+```
+https://raw.githubusercontent.com/afiq-haekal/ez-install/refs/heads/main/infera.sh && bash infera.sh
+```
+
 # note : bukan buat umum, kalo mau make pastiin addressnya ganti yh
