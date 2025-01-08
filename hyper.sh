@@ -28,6 +28,11 @@ reload_environment() {
         export PATH=/usr/local/cuda-12.3/bin:$PATH
         export LD_LIBRARY_PATH=/usr/local/cuda-12.3/lib64:$LD_LIBRARY_PATH
         
+        # Ensure .aios is in PATH
+        if [ -d "/root/.aios" ] && [[ ":$PATH:" != *":/root/.aios:"* ]]; then
+            export PATH="/root/.aios:$PATH"
+        fi
+        
         # Then source bashrc
         source ~/.bashrc
         
@@ -220,15 +225,48 @@ install_hyperspace() {
 # Function to start Hyperspace
 start_hyperspace() {
     echo "Starting Hyperspace in background..."
+    
+    # Reload environment before starting
+    reload_environment || {
+        echo -e "${RED}Failed to load environment variables${NC}"
+        return 1
+    }
+    
     if pgrep -f "aios-cli" > /dev/null; then
         echo -e "${YELLOW}Hyperspace is already running${NC}"
         return 1
     fi
     
-    nohup aios-cli start > "$RUNTIME_LOG" 2>&1 &
+    # Check for aios-cli in different locations
+    AIOS_CLI=""
+    if [ -f "/root/.aios/aios-cli" ]; then
+        AIOS_CLI="/root/.aios/aios-cli"
+    elif [ -f "./aios-cli" ]; then
+        AIOS_CLI="./aios-cli"
+    elif command -v aios-cli >/dev/null 2>&1; then
+        AIOS_CLI="aios-cli"
+    else
+        echo -e "${RED}Could not find aios-cli executable${NC}"
+        return 1
+    fi
+    
+    echo "Using aios-cli from: $AIOS_CLI"
+    
+    # Start Hyperspace with the found executable
+    nohup $AIOS_CLI start > "$RUNTIME_LOG" 2>&1 &
     HYPERSPACE_PID=$!
-    echo -e "${GREEN}Hyperspace started with PID: $HYPERSPACE_PID${NC}"
-    return 0
+    
+    # Wait a moment to check if process is still running
+    sleep 2
+    if ps -p $HYPERSPACE_PID > /dev/null; then
+        echo -e "${GREEN}Hyperspace started with PID: $HYPERSPACE_PID${NC}"
+        return 0
+    else
+        echo -e "${RED}Failed to start Hyperspace. Check runtime logs for details${NC}"
+        echo "Last few lines of runtime log:"
+        tail -n 5 "$RUNTIME_LOG"
+        return 1
+    fi
 }
 
 # Function to stop Hyperspace
