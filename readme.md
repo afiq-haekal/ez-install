@@ -19,7 +19,7 @@ wget https://raw.githubusercontent.com/afiq-haekal/ez-install/refs/heads/main/hy
 
 # INFERA
 ```
-https://raw.githubusercontent.com/afiq-haekal/ez-install/refs/heads/main/infera.sh && bash infera.sh
+wget https://raw.githubusercontent.com/afiq-haekal/ez-install/refs/heads/main/infera.sh && bash infera.sh
 ```
 
 # note : bukan buat umum, kalo mau make pastiin addressnya ganti yh
