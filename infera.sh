@@ -61,6 +61,17 @@ install_infera() {
     echo -e "${GREEN}Infera installation completed${NC}"
 }
 
+# Function to link node
+link_node() {
+    echo -e "${BLUE}Linking Node...${NC}"
+    response=$(wget -qO- http://localhost:11025/link_node/cc482e8c5e6806baa13e4d38)
+    if echo "$response" | grep -q '"status"[[:space:]]*:[[:space:]]*"linked"'; then
+        echo -e "${GREEN}Node successfully linked!${NC}"
+    else
+        echo -e "${RED}Error: Something went wrong. Please contact support.${NC}"
+    fi
+}
+
 # Function to show logs
 show_logs() {
     local service=$1
@@ -207,9 +218,10 @@ show_service_menu() {
     echo "4. Stop Infera"
     echo "5. Start Both Services"
     echo "6. Stop Both Services"
-    echo "7. Back to Main Menu"
+    echo "7. Link Node"
+    echo "8. Back to Main Menu"
     echo
-    read -p "Select an option (1-7): " choice
+    read -p "Select an option (1-8): " choice
 
     case $choice in
         1)
@@ -233,6 +245,9 @@ show_service_menu() {
             stop_service "infera"
             ;;
         7)
+            link_node
+            ;;
+        8)
             show_menu
             return
             ;;
