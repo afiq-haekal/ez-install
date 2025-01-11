@@ -22,4 +22,9 @@ wget https://raw.githubusercontent.com/afiq-haekal/ez-install/refs/heads/main/hy
 wget https://raw.githubusercontent.com/afiq-haekal/ez-install/refs/heads/main/infera.sh && bash infera.sh
 ```
 
+# NETWORK3
+```
+wget https://raw.githubusercontent.com/afiq-haekal/ez-install/refs/heads/main/network3.sh && bash network3.sh
+```
+
 # note : bukan buat umum, kalo mau make pastiin addressnya ganti yh
