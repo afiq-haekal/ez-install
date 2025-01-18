@@ -27,4 +27,10 @@ wget https://raw.githubusercontent.com/afiq-haekal/ez-install/refs/heads/main/in
 wget https://raw.githubusercontent.com/afiq-haekal/ez-install/refs/heads/main/network3.sh && bash network3.sh
 ```
 
+
+# Gaia
+```
+wget https://raw.githubusercontent.com/afiq-haekal/ez-install/refs/heads/main/gaia.sh && bash gaia.sh
+```
+
 # note : bukan buat umum, kalo mau make pastiin addressnya ganti yh
