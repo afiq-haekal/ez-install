@@ -172,6 +172,29 @@ get_gaianet_address() {
     return 1
 }
 
+get_model_name() {
+    echo -e "${BLUE}Extracting model name from Docker logs...${NC}"
+    local max_attempts=12
+    local attempt=1
+    
+    while [ $attempt -le $max_attempts ]; do
+        echo -e "${BLUE}Attempt $attempt of $max_attempts to get model name...${NC}"
+        MODEL_NAME=$(docker logs gaianet 2>&1 | grep "wasmedge --dir" | grep -o "model-name [^,]*" | cut -d' ' -f2)
+        
+        if [ -n "$MODEL_NAME" ]; then
+            echo -e "${GREEN}Successfully found model name: ${MODEL_NAME}${NC}"
+            return 0
+        else
+            echo -e "${YELLOW}Model name not found yet, waiting 10 seconds...${NC}"
+            sleep 10
+            attempt=$((attempt + 1))
+        fi
+    done
+    
+    echo -e "${RED}Failed to get model name after $max_attempts attempts${NC}"
+    return 1
+}
+
 get_gaia_info() {
     echo -e "${BLUE}Getting Gaia information...${NC}"
     
@@ -217,7 +240,14 @@ setup_bot() {
         return 1
     fi
     
+    if ! get_model_name; then
+        echo -e "${RED}Failed to get model name. Bot setup aborted.${NC}"
+        echo -e "${RED}Please ensure Gaia is running properly and try again.${NC}"
+        return 1
+    fi
+    
     echo -e "${BLUE}Proceeding with bot setup using address: ${ADDRESS}${NC}"
+    echo -e "${BLUE}Using model name: ${MODEL_NAME}${NC}"
     
     if [ -d "Gaianet-API-Bot" ]; then
         echo -e "${YELLOW}Gaianet-API-Bot directory already exists. Removing it...${NC}"
@@ -238,12 +268,21 @@ setup_bot() {
         cp sample.env .env
         echo -e "${GREEN}Created .env file from sample.env${NC}"
         
+        # Update API_URL in .env
         if sed -i "s/0x[a-fA-F0-9]\{40\}/${ADDRESS}/" .env; then
             echo -e "${GREEN}Successfully updated API_URL in .env with address: ${ADDRESS}${NC}"
         else
             echo -e "${RED}Failed to update API_URL in .env. Bot setup aborted.${NC}"
             return 1
         fi
+        
+        # Update MODEL in .env
+        if grep -q "^MODEL=" .env; then
+            sed -i "s/^MODEL=.*/MODEL=${MODEL_NAME}/" .env
+        else
+            echo "MODEL=${MODEL_NAME}" >> .env
+        fi
+        echo -e "${GREEN}Successfully updated MODEL in .env with: ${MODEL_NAME}${NC}"
         
         configure_discord_webhook
     else
