@@ -44,6 +44,12 @@ check_docker() {
         echo -e "${RED}Docker is not installed. Please install Docker first.${NC}"
         exit 1
     fi
+    
+    # Check if Docker daemon is running
+    if ! docker info &> /dev/null; then
+        echo -e "${RED}Docker daemon is not running. Please start Docker service.${NC}"
+        exit 1
+    fi
 }
 
 check_git() {
@@ -80,44 +86,51 @@ check_python() {
     fi
 }
 
-select_model() {
-    echo -e "\n${BLUE}=== Available Gaia Models ===${NC}"
-    echo "1. gaianet/phi-3-mini-instruct-4k_paris (Default)"
-    echo "2. gaianet/qwen2-0.5b-instruct_rustlang"
-    echo "3. gaianet/llama-3-8b-instruct_paris"
-    echo "4. gaianet/llama-3-8b-instruct"
-    echo "5. gaianet/llama-3.1-8b-instruct_rustlang"
-    echo -e "${BLUE}=========================${NC}\n"
+install_gaia() {
+    clear  # Clear the screen first
+    echo -e "\n${BLUE}====================================${NC}"
+    echo -e "${BLUE}     Installing Gaia via Docker${NC}"
+    echo -e "${BLUE}====================================${NC}\n"
     
-    read -p "Please select a model (1-5) [Default: 1]: " model_choice
+    echo -e "${YELLOW}Available Models:${NC}"
+    echo -e "${GREEN}1. gaianet/phi-3-mini-instruct-4k_paris:cuda12${NC}"
+    echo -e "${GREEN}2. gaianet/qwen2-0.5b-instruct_rustlang${NC}"
+    echo -e "${GREEN}3. gaianet/llama-3-8b-instruct_paris:cuda12${NC}"
+    echo -e "${GREEN}4. gaianet/llama-3-8b-instruct:cuda12${NC}"
+    echo -e "${GREEN}5. gaianet/llama-3.1-8b-instruct_rustlang${NC}\n"
+    
+    read -p "Please select a model number (1-5) [Default: 1]: " model_choice
     
     case $model_choice in
         1|"")
-            echo "gaianet/phi-3-mini-instruct-4k_paris"
+            MODEL="gaianet/phi-3-mini-instruct-4k_paris:cuda12"
             ;;
         2)
-            echo "gaianet/qwen2-0.5b-instruct_rustlang"
+            MODEL="gaianet/qwen2-0.5b-instruct_rustlang"
             ;;
         3)
-            echo "gaianet/llama-3-8b-instruct_paris"
+            MODEL="gaianet/llama-3-8b-instruct_paris:cuda12"
             ;;
         4)
-            echo "gaianet/llama-3-8b-instruct"
+            MODEL="gaianet/llama-3-8b-instruct:cuda12"
             ;;
         5)
-            echo "gaianet/llama-3.1-8b-instruct_rustlang"
+            MODEL="gaianet/llama-3.1-8b-instruct_rustlang"
             ;;
         *)
             echo -e "${YELLOW}Invalid choice, using default model.${NC}"
-            echo "gaianet/phi-3-mini-instruct-4k_paris"
+            MODEL="gaianet/phi-3-mini-instruct-4k_paris:cuda12"
             ;;
     esac
-}
-
-install_gaia() {
-    echo -e "${BLUE}Installing Gaia using Docker...${NC}"
-    MODEL=$(select_model)
-    echo -e "${GREEN}Selected model: $MODEL${NC}"
+    
+    echo -e "\n${GREEN}Selected model: $MODEL${NC}"
+    echo -e "${BLUE}Starting Docker installation...${NC}\n"
+    
+    # Check if container with same name exists
+    if docker ps -a --format '{{.Names}}' | grep -q "^gaianet$"; then
+        echo -e "${YELLOW}Container 'gaianet' already exists. Removing it...${NC}"
+        docker rm -f gaianet
+    fi
     
     docker run -d --name gaianet \
         --gpus all \
@@ -127,6 +140,9 @@ install_gaia() {
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}Gaia installation completed successfully!${NC}"
+        echo -e "${BLUE}Waiting for container to initialize...${NC}"
+        sleep 5
+        docker logs gaianet
     else
         echo -e "${RED}Error during Gaia installation${NC}"
         return 1
@@ -158,6 +174,13 @@ get_gaianet_address() {
 
 get_gaia_info() {
     echo -e "${BLUE}Getting Gaia information...${NC}"
+    
+    # Check if container is running
+    if ! docker ps --format '{{.Names}}' | grep -q "^gaianet$"; then
+        echo -e "${RED}Gaia container is not running. Please start it first.${NC}"
+        return 1
+    fi
+    
     docker exec -it gaianet /root/gaianet/bin/gaianet info
     
     if [ $? -eq 0 ]; then
@@ -266,6 +289,7 @@ setup_bot() {
 
 # Main menu function
 show_menu() {
+    clear  # Clear screen before showing menu
     echo -e "\n${BLUE}=== Gaia Installation and Setup Menu ===${NC}"
     echo "1. Install Gaia"
     echo "2. Get Gaia Info"
