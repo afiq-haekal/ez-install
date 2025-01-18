@@ -1,163 +1,175 @@
 #!/bin/bash
 
-# Colors for better visual feedback
-GREEN='\033[0;32m'
+# Colors for better readability
 RED='\033[0;31m'
-YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Function to print colored text
-print_color() {
-    local color=$1
-    local text=$2
-    echo -e "${color}${text}${NC}"
-}
-
-# Function to install latest version
-install_latest() {
-    print_color $YELLOW "Installing latest version of GaiaNet..."
-    curl -sSfL 'https://github.com/GaiaNet-AI/gaianet-node/releases/latest/download/install.sh' | bash
-    if [ $? -eq 0 ]; then
-        print_color $GREEN "Installation completed successfully!"
-        print_color $YELLOW "Updating environment..."
-        source ~/.bashrc
-        export PATH="$HOME/gaianet/bin:$PATH"
-        print_color $GREEN "Environment updated! You can now use GaiaNet"
-    else
-        print_color $RED "Installation failed!"
+# Function to check if Docker is installed
+check_docker() {
+    if ! command -v docker &> /dev/null; then
+        echo -e "${RED}Docker is not installed. Please install Docker first.${NC}"
+        exit 1
     fi
 }
 
-# Function to update installation
-update_installation() {
-    print_color $YELLOW "Updating GaiaNet..."
-    curl -sSfL 'https://github.com/GaiaNet-AI/gaianet-node/releases/latest/download/install.sh' | bash -s -- --upgrade
-    if [ $? -eq 0 ]; then
-        print_color $GREEN "Update completed successfully!"
-    else
-        print_color $RED "Update failed!"
+# Function to check if Git is installed
+check_git() {
+    if ! command -v git &> /dev/null; then
+        echo -e "${RED}Git is not installed. Please install Git first.${NC}"
+        exit 1
     fi
 }
 
-# Function to uninstall
-uninstall_gaianet() {
-    read -p "Are you sure you want to uninstall GaiaNet? (y/n): " confirm
-    if [[ $confirm == "y" || $confirm == "Y" ]]; then
-        print_color $YELLOW "Uninstalling GaiaNet..."
-        curl -sSfL 'https://github.com/GaiaNet-AI/gaianet-node/releases/latest/download/uninstall.sh' | bash
-        if [ $? -eq 0 ]; then
-            print_color $GREEN "Uninstallation completed successfully!"
+# Function to check and install Python and pip
+check_python() {
+    if ! command -v python3 &> /dev/null; then
+        echo -e "${RED}Python3 is not installed. Installing Python3...${NC}"
+        if [ -f /etc/debian_version ]; then
+            sudo apt-get update
+            sudo apt-get install -y python3
+        elif [ -f /etc/redhat-release ]; then
+            sudo yum install -y python3
         else
-            print_color $RED "Uninstallation failed!"
+            echo -e "${RED}Unsupported distribution. Please install Python3 manually.${NC}"
+            exit 1
+        fi
+    fi
+
+    if ! command -v pip &> /dev/null; then
+        echo -e "${RED}pip is not installed. Installing pip...${NC}"
+        if [ -f /etc/debian_version ]; then
+            sudo apt-get install -y python3-pip
+        elif [ -f /etc/redhat-release ]; then
+            sudo yum install -y python3-pip
+        else
+            echo -e "${RED}Unsupported distribution. Please install pip manually.${NC}"
+            exit 1
         fi
     fi
 }
 
-# Function to initialize node
-init_node() {
-    if ! command -v gaianet &> /dev/null; then
-        print_color $RED "GaiaNet not found. Please install it first."
-        return 1
-    fi
-
-    # Check for both nodeid and model file
-    if [ -f "$HOME/gaianet/nodeid.json" ] && [ -f "$HOME/gaianet/models/Llama-3.2-3B-Instruct-Q5_K_M.gguf" ]; then
-        print_color $YELLOW "Node is already initialized with required model"
-        return 0
-    fi
-
-    print_color $YELLOW "Initializing node..."
-    gaianet init
+# Function to install Gaia using Docker
+install_gaia() {
+    echo -e "${BLUE}Installing Gaia using Docker...${NC}"
+    docker run -d --name gaianet \
+        --gpus all \
+        -p 8080:8080 \
+        -v $(pwd)/qdrant_storage:/root/gaianet/qdrant/storage:z \
+        gaianet/phi-3-mini-instruct-4k_paris:cuda12
+    
     if [ $? -eq 0 ]; then
-        print_color $GREEN "Node initialized successfully"
+        echo -e "${GREEN}Gaia installation completed successfully!${NC}"
     else
-        print_color $RED "Node initialization failed"
+        echo -e "${RED}Error during Gaia installation${NC}"
+    fi
+}
+
+# Function to get Gaia info
+get_gaia_info() {
+    echo -e "${BLUE}Getting Gaia information...${NC}"
+    docker exec -it gaianet /root/gaianet/bin/gaianet info
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Successfully retrieved Gaia information!${NC}"
+    else
+        echo -e "${RED}Error getting Gaia information${NC}"
+    fi
+}
+
+# Function to get GaiaNet address from Docker logs
+get_gaianet_address() {
+    echo -e "${BLUE}Getting GaiaNet address from Docker logs...${NC}"
+    # Wait for the container to output the address
+    sleep 5
+    ADDRESS=$(docker logs gaianet 2>&1 | grep "GaiaNet node is started at:" | grep -o "0x[a-fA-F0-9]\{40\}")
+    
+    if [ -n "$ADDRESS" ]; then
+        echo -e "${GREEN}Found GaiaNet address: ${ADDRESS}${NC}"
+        return 0
+    else
+        echo -e "${RED}Could not find GaiaNet address in logs${NC}"
         return 1
     fi
 }
 
-# Function to start node
-start_node() {
-    if ! command -v gaianet &> /dev/null; then
-        print_color $RED "GaiaNet not found. Please install it first."
-        return 1
-    fi
-
-    if [ ! -f "$HOME/gaianet/nodeid.json" ]; then
-        print_color $RED "Node is not initialized. Please initialize first (option 4)."
-        return 1
-    fi
-
-    print_color $YELLOW "Starting node..."
-    nohup gaianet start > gaianet.log 2>&1 &
-    sleep 2
-
-    if pgrep -f "gaianet start" > /dev/null; then
-        print_color $GREEN "Node started successfully"
-        gaianet info
+# Function to set up Gaia bot
+setup_bot() {
+    echo -e "${BLUE}Setting up Gaia bot...${NC}"
+    
+    # Clone the repository
+    git clone https://github.com/afiq-haekal/Gaianet-API-Bot.git
+    cd Gaianet-API-Bot
+    
+    # Copy sample.env to .env
+    if [ -f "sample.env" ]; then
+        cp sample.env .env
+        echo -e "${GREEN}Created .env file from sample.env${NC}"
+        
+        # Get GaiaNet address and update .env
+        if get_gaianet_address; then
+            # Update the API_URL in .env
+            sed -i "s/0x[a-fA-F0-9]\{40\}/${ADDRESS}/" .env
+            echo -e "${GREEN}Updated API_URL in .env with address: ${ADDRESS}${NC}"
+        else
+            echo -e "${RED}Failed to update API_URL in .env. Please update manually.${NC}"
+        fi
     else
-        print_color $RED "Failed to start node"
-        tail -n 5 gaianet.log
+        echo -e "${RED}sample.env not found!${NC}"
+        exit 1
     fi
-}
-
-# Function to stop node
-stop_node() {
-    if ! command -v gaianet &> /dev/null; then
-        print_color $RED "GaiaNet not found. Please install it first."
-        return 1
-    fi
-
-    if pgrep -f "gaianet start" > /dev/null; then
-        print_color $YELLOW "Stopping node..."
-        gaianet stop
-        print_color $GREEN "Node stopped"
+    
+    # Install requirements
+    pip install -r requirements.txt
+    
+    # Run the bot with nohup
+    echo -e "${BLUE}Starting the bot with nohup...${NC}"
+    nohup python3 main.py > bot.log 2>&1 &
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Bot setup completed successfully! Check bot.log for output.${NC}"
     else
-        print_color $RED "No running node found"
+        echo -e "${RED}Error during bot setup${NC}"
     fi
-}
-
-# Function to show node info
-show_info() {
-    if ! command -v gaianet &> /dev/null; then
-        print_color $RED "GaiaNet not found. Please install it first."
-        return 1
-    fi
-
-    if [ ! -f "$HOME/gaianet/nodeid.json" ]; then
-        print_color $RED "Node is not initialized. Please initialize first (option 4)."
-        return 1
-    fi
-
-    gaianet info
 }
 
 # Main menu
+show_menu() {
+    echo -e "\n${BLUE}=== Gaia Installation and Setup Menu ===${NC}"
+    echo "1. Install Gaia"
+    echo "2. Get Gaia Info"
+    echo "3. Setup Gaia Bot"
+    echo "4. Exit"
+    echo -e "${BLUE}======================================${NC}\n"
+}
+
+# Main loop
 while true; do
-    clear
-    print_color $GREEN "=== GaiaNet Node Manager ==="
-    echo "1. Install GaiaNet"
-    echo "2. Update GaiaNet"
-    echo "3. Uninstall GaiaNet"
-    echo "4. Initialize Node"
-    echo "5. Start Node"
-    echo "6. Stop Node"
-    echo "7. Show Node Info"
-    echo "8. Exit"
-    echo
-    
-    read -p "Enter your choice (1-8): " choice
+    show_menu
+    read -p "Please select an option (1-4): " choice
     
     case $choice in
-        1) install_latest ;;
-        2) update_installation ;;
-        3) uninstall_gaianet ;;
-        4) init_node ;;
-        5) start_node ;;
-        6) stop_node ;;
-        7) show_info ;;
-        8) print_color $GREEN "Goodbye!"; exit 0 ;;
-        *) print_color $RED "Invalid option. Please try again." ;;
+        1)
+            check_docker
+            install_gaia
+            ;;
+        2)
+            check_docker
+            get_gaia_info
+            ;;
+        3)
+            check_git
+            check_python
+            setup_bot
+            ;;
+        4)
+            echo -e "${GREEN}Exiting the installer. Goodbye!${NC}"
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Invalid option. Please select 1-4${NC}"
+            ;;
     esac
     
     echo -e "\nPress Enter to continue..."
