@@ -153,7 +153,13 @@ setup_bot() {
     
     # Run the bot with nohup
     echo -e "${BLUE}Starting the bot with nohup...${NC}"
-    if ! nohup python3 main.py > bot.log 2>&1 &; then
+    nohup python3 main.py > bot.log 2>&1 &
+    PID=$!
+    
+    # Check if process is running
+    if ps -p $PID > /dev/null; then
+        echo -e "${GREEN}Bot started successfully with PID: $PID${NC}"
+    else
         echo -e "${RED}Failed to start the bot. Bot setup aborted.${NC}"
         return 1
     fi
