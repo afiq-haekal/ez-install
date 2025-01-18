@@ -78,54 +78,90 @@ get_gaia_info() {
     fi
 }
 
-# Function to get GaiaNet address from Docker logs
+# Function to get GaiaNet address from Docker logs with retries
 get_gaianet_address() {
     echo -e "${BLUE}Getting GaiaNet address from Docker logs...${NC}"
-    # Wait for the container to output the address
-    sleep 5
-    ADDRESS=$(docker logs gaianet 2>&1 | grep "GaiaNet node is started at:" | grep -o "0x[a-fA-F0-9]\{40\}")
+    local max_attempts=12  # Maximum number of attempts (2 minutes total)
+    local attempt=1
     
-    if [ -n "$ADDRESS" ]; then
-        echo -e "${GREEN}Found GaiaNet address: ${ADDRESS}${NC}"
-        return 0
-    else
-        echo -e "${RED}Could not find GaiaNet address in logs${NC}"
-        return 1
-    fi
+    while [ $attempt -le $max_attempts ]; do
+        echo -e "${BLUE}Attempt $attempt of $max_attempts to get GaiaNet address...${NC}"
+        ADDRESS=$(docker logs gaianet 2>&1 | grep "GaiaNet node is started at:" | grep -o "0x[a-fA-F0-9]\{40\}")
+        
+        if [ -n "$ADDRESS" ]; then
+            echo -e "${GREEN}Successfully found GaiaNet address: ${ADDRESS}${NC}"
+            return 0
+        else
+            echo -e "${YELLOW}Address not found yet, waiting 10 seconds...${NC}"
+            sleep 10
+            attempt=$((attempt + 1))
+        fi
+    done
+    
+    echo -e "${RED}Failed to get GaiaNet address after $max_attempts attempts${NC}"
+    return 1
 }
 
 # Function to set up Gaia bot
 setup_bot() {
     echo -e "${BLUE}Setting up Gaia bot...${NC}"
     
-    # Clone the repository
-    git clone https://github.com/afiq-haekal/Gaianet-API-Bot.git
-    cd Gaianet-API-Bot
+    # First, try to get GaiaNet address
+    if ! get_gaianet_address; then
+        echo -e "${RED}Failed to get GaiaNet address. Bot setup aborted.${NC}"
+        echo -e "${RED}Please ensure Gaia is running properly and try again.${NC}"
+        return 1
+    fi
     
-    # Copy sample.env to .env
+    # Only proceed with setup if we have the address
+    echo -e "${BLUE}Proceeding with bot setup using address: ${ADDRESS}${NC}"
+    
+    # Clone the repository
+    if ! git clone https://github.com/afiq-haekal/Gaianet-API-Bot.git; then
+        echo -e "${RED}Failed to clone repository. Bot setup aborted.${NC}"
+        return 1
+    fi
+    
+    cd Gaianet-API-Bot || {
+        echo -e "${RED}Failed to enter project directory. Bot setup aborted.${NC}"
+        return 1
+    }
+    
+    # Copy and update .env file
     if [ -f "sample.env" ]; then
         cp sample.env .env
         echo -e "${GREEN}Created .env file from sample.env${NC}"
         
-        # Get GaiaNet address and update .env
-        if get_gaianet_address; then
-            # Update the API_URL in .env
-            sed -i "s/0x[a-fA-F0-9]\{40\}/${ADDRESS}/" .env
-            echo -e "${GREEN}Updated API_URL in .env with address: ${ADDRESS}${NC}"
+        # Update the API_URL in .env
+        if sed -i "s/0x[a-fA-F0-9]\{40\}/${ADDRESS}/" .env; then
+            echo -e "${GREEN}Successfully updated API_URL in .env with address: ${ADDRESS}${NC}"
         else
-            echo -e "${RED}Failed to update API_URL in .env. Please update manually.${NC}"
+            echo -e "${RED}Failed to update API_URL in .env. Bot setup aborted.${NC}"
+            return 1
         fi
     else
-        echo -e "${RED}sample.env not found!${NC}"
-        exit 1
+        echo -e "${RED}sample.env not found! Bot setup aborted.${NC}"
+        return 1
     fi
     
     # Install requirements
-    pip install -r requirements.txt
+    echo -e "${BLUE}Installing Python requirements...${NC}"
+    if ! pip install -r requirements.txt; then
+        echo -e "${RED}Failed to install requirements. Bot setup aborted.${NC}"
+        return 1
+    fi
     
     # Run the bot with nohup
     echo -e "${BLUE}Starting the bot with nohup...${NC}"
-    nohup python3 main.py > bot.log 2>&1 &
+    if ! nohup python3 main.py > bot.log 2>&1 &; then
+        echo -e "${RED}Failed to start the bot. Bot setup aborted.${NC}"
+        return 1
+    fi
+    
+    echo -e "${GREEN}Bot setup completed successfully!${NC}"
+    echo -e "${GREEN}Bot logs can be found in bot.log${NC}"
+    return 0
+}
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}Bot setup completed successfully! Check bot.log for output.${NC}"
