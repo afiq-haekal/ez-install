@@ -4,6 +4,7 @@
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
+YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Function to check if Docker is installed
@@ -63,18 +64,7 @@ install_gaia() {
         echo -e "${GREEN}Gaia installation completed successfully!${NC}"
     else
         echo -e "${RED}Error during Gaia installation${NC}"
-    fi
-}
-
-# Function to get Gaia info
-get_gaia_info() {
-    echo -e "${BLUE}Getting Gaia information...${NC}"
-    docker exec -it gaianet /root/gaianet/bin/gaianet info
-    
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}Successfully retrieved Gaia information!${NC}"
-    else
-        echo -e "${RED}Error getting Gaia information${NC}"
+        exit 1
     fi
 }
 
@@ -100,6 +90,18 @@ get_gaianet_address() {
     
     echo -e "${RED}Failed to get GaiaNet address after $max_attempts attempts${NC}"
     return 1
+}
+
+# Function to get Gaia info
+get_gaia_info() {
+    echo -e "${BLUE}Getting Gaia information...${NC}"
+    docker exec -it gaianet /root/gaianet/bin/gaianet info
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Successfully retrieved Gaia information!${NC}"
+    else
+        echo -e "${RED}Error getting Gaia information${NC}"
+    fi
 }
 
 # Function to set up Gaia bot
@@ -159,20 +161,11 @@ setup_bot() {
     # Check if process is running
     if ps -p $PID > /dev/null; then
         echo -e "${GREEN}Bot started successfully with PID: $PID${NC}"
+        echo -e "${GREEN}Bot logs can be found in bot.log${NC}"
+        return 0
     else
         echo -e "${RED}Failed to start the bot. Bot setup aborted.${NC}"
         return 1
-    fi
-    
-    echo -e "${GREEN}Bot setup completed successfully!${NC}"
-    echo -e "${GREEN}Bot logs can be found in bot.log${NC}"
-    return 0
-}
-    
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}Bot setup completed successfully! Check bot.log for output.${NC}"
-    else
-        echo -e "${RED}Error during bot setup${NC}"
     fi
 }
 
