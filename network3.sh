@@ -82,15 +82,23 @@ echo "Created on: $(date)" >> "$OUTPUT_FILE"
 echo "----------------------------------------" >> "$OUTPUT_FILE"
 echo "" >> "$OUTPUT_FILE"
 
-# Function to get valid port number from user
-get_valid_port() {
+# Function to get valid starting port number from user
+get_valid_starting_port() {
     local port
+    local node_count=$1
     while true; do
-        read -p "Enter port number for container $1 (1024-65535): " port
+        read -p "Enter starting port number (1024-65535): " port
         if [[ "$port" =~ ^[0-9]+$ ]] && [ "$port" -ge 1024 ] && [ "$port" -le 65535 ]; then
-            if is_port_in_use "$port"; then
-                print_error "Port $port is already in use. Please choose a different port."
-            else
+            # Check if the port range is available
+            local available=true
+            for i in $(seq 0 $((node_count-1))); do
+                if is_port_in_use $((port + i)); then
+                    print_error "Port $((port + i)) is already in use."
+                    available=false
+                    break
+                fi
+            done
+            if [ "$available" = true ]; then
                 echo "$port"
                 return 0
             fi
@@ -103,13 +111,11 @@ get_valid_port() {
 # Function to create and setup container
 setup_container() {
     local container_number=$1
+    local starting_port=$2
     local container_name="network3-$container_number"
+    local port=$((starting_port + container_number - 1))
 
-    print_message "Setting up container $container_number"
-    
-    # Get port from user
-    print_message "Port selection for $container_name"
-    local port=$(get_valid_port "$container_number")
+    print_message "Setting up container $container_number with port $port"
     
     # Check if container already exists
     if docker ps -a | grep -q "$container_name"; then
@@ -159,9 +165,15 @@ if ! [[ "$node_count" =~ ^[1-5]$ ]]; then
     exit 1
 fi
 
+# Get starting port from user
+starting_port=$(get_valid_starting_port "$node_count")
+
+print_message "Will use ports $starting_port to $((starting_port + node_count - 1))"
+read -p "Press Enter to continue or Ctrl+C to cancel..."
+
 for i in $(seq 1 "$node_count"); do
     print_message "Setting up node $i of $node_count"
-    setup_container "$i"
+    setup_container "$i" "$starting_port"
 done
 
 print_message "Installation complete! All data has been saved to $OUTPUT_FILE"
