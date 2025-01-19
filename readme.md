@@ -29,6 +29,7 @@ wget https://raw.githubusercontent.com/afiq-haekal/ez-install/refs/heads/main/ne
 
 
 # Gaia
+opsi cpu ada di 2 dan 5, menggunakan gpu ada di 134
 ```
 wget https://raw.githubusercontent.com/afiq-haekal/ez-install/refs/heads/main/gaia.sh && bash gaia.sh
 ```
