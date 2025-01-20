@@ -7,7 +7,7 @@ BLUE='\033[0;34m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-# All functions should be defined before being used
+# Function to configure Discord webhook
 configure_discord_webhook() {
     echo -e "${BLUE}Discord Webhook Configuration${NC}"
     echo -e "${YELLOW}The webhook URL should look like: https://discord.com/api/webhooks/ID/TOKEN${NC}"
@@ -20,7 +20,7 @@ configure_discord_webhook() {
             return 0
         fi
         
-        if [[ $webhook_url == https://discordapp.com/api/webhooks/* ]]; then
+        if [[ $webhook_url == https://discordapp.com/api/webhooks/* ]] || [[ $webhook_url == https://discord.com/api/webhooks/* ]]; then
             if grep -q "DISCORD_WEBHOOK_URL=" .env; then
                 sed -i "s#DISCORD_WEBHOOK_URL=.*#DISCORD_WEBHOOK_URL=$webhook_url#" .env
             else
@@ -39,19 +39,71 @@ configure_discord_webhook() {
     done
 }
 
+# Function to restore nodeid
+restore_nodeid() {
+    echo -e "${BLUE}Restore NodeID Configuration${NC}"
+    
+    while true; do
+        read -p "Do you want to restore a nodeid.json file? (y/n): " restore_choice
+        
+        case $restore_choice in
+            [Yy]*)
+                read -p "Enter the path to your nodeid.json file: " nodeid_path
+                
+                if [ -f "$nodeid_path" ]; then
+                    if docker cp "$nodeid_path" gaianet:/root/gaianet/nodeid.json; then
+                        echo -e "${GREEN}Successfully restored nodeid.json${NC}"
+                        echo -e "${YELLOW}Restarting container to apply changes...${NC}"
+                        if docker restart gaianet; then
+                            echo -e "${GREEN}Container restarted successfully!${NC}"
+                            # Clear logs after restart
+                            docker logs gaianet --since 0m > /dev/null 2>&1
+                            sleep 5  # Wait for container to initialize
+                            return 0
+                        else
+                            echo -e "${RED}Failed to restart container${NC}"
+                            return 1
+                        fi
+                    else
+                        echo -e "${RED}Failed to copy nodeid.json to container${NC}"
+                        read -p "Try again? (y/n): " retry
+                        if [[ $retry != [Yy]* ]]; then
+                            return 1
+                        fi
+                    fi
+                else
+                    echo -e "${RED}File not found: $nodeid_path${NC}"
+                    read -p "Try again? (y/n): " retry
+                    if [[ $retry != [Yy]* ]]; then
+                        return 1
+                    fi
+                fi
+                ;;
+            [Nn]*)
+                echo -e "${YELLOW}Skipping nodeid.json restoration${NC}"
+                return 0
+                ;;
+            *)
+                echo -e "${RED}Please answer yes (y) or no (n)${NC}"
+                ;;
+        esac
+    done
+}
+
+# Function to check Docker installation
 check_docker() {
     if ! command -v docker &> /dev/null; then
         echo -e "${RED}Docker is not installed. Please install Docker first.${NC}"
         exit 1
     fi
     
-    # Check if Docker daemon is running
     if ! docker info &> /dev/null; then
         echo -e "${RED}Docker daemon is not running. Please start Docker service.${NC}"
         exit 1
     fi
 }
 
+# Function to check Git installation
 check_git() {
     if ! command -v git &> /dev/null; then
         echo -e "${RED}Git is not installed. Please install Git first.${NC}"
@@ -59,6 +111,7 @@ check_git() {
     fi
 }
 
+# Function to check Python installation
 check_python() {
     if ! command -v python3 &> /dev/null; then
         echo -e "${RED}Python3 is not installed. Installing Python3...${NC}"
@@ -86,11 +139,52 @@ check_python() {
     fi
 }
 
+# Function to install Gaia
 install_gaia() {
-    clear  # Clear the screen first
+    clear
     echo -e "\n${BLUE}====================================${NC}"
     echo -e "${BLUE}     Installing Gaia via Docker${NC}"
     echo -e "${BLUE}====================================${NC}\n"
+    
+    # Check for existing container
+    if docker ps -a --format '{{.Names}}' | grep -q "^gaianet$"; then
+        echo -e "${YELLOW}Existing 'gaianet' container detected${NC}"
+        echo -e "1. Stop and remove existing container"
+        echo -e "2. Restart existing container"
+        echo -e "3. Abort installation"
+        
+        while true; do
+            read -p "Please select an option (1-3): " container_choice
+            
+            case $container_choice in
+                1)
+                    echo -e "${YELLOW}Stopping and removing existing container...${NC}"
+                    docker stop gaianet
+                    docker rm gaianet
+                    break
+                    ;;
+                2)
+                    echo -e "${YELLOW}Restarting existing container...${NC}"
+                    docker restart gaianet
+                    echo -e "${GREEN}Container restarted successfully!${NC}"
+                    # Clear logs after restart
+                    docker logs gaianet --since 0m > /dev/null 2>&1
+                    sleep 5
+                    
+                    # Ask about nodeid restoration after restart
+                    restore_nodeid
+                    return 0
+                    ;;
+                3)
+                    echo -e "${YELLOW}Installation aborted${NC}"
+                    return 0
+                    ;;
+                *)
+                    echo -e "${RED}Invalid choice. Please select 1-3${NC}"
+                    ;;
+            esac
+        done
+    fi
     
     echo -e "${YELLOW}Available Models:${NC}"
     echo -e "${GREEN}1. gaianet/phi-3-mini-instruct-4k_paris:cuda12${NC}"
@@ -126,12 +220,6 @@ install_gaia() {
     echo -e "\n${GREEN}Selected model: $MODEL${NC}"
     echo -e "${BLUE}Starting Docker installation...${NC}\n"
     
-    # Check if container with same name exists
-    if docker ps -a --format '{{.Names}}' | grep -q "^gaianet$"; then
-        echo -e "${YELLOW}Container 'gaianet' already exists. Removing it...${NC}"
-        docker rm -f gaianet
-    fi
-    
     docker run -d --name gaianet \
         --gpus all \
         -p 8080:8080 \
@@ -143,12 +231,35 @@ install_gaia() {
         echo -e "${BLUE}Waiting for container to initialize...${NC}"
         sleep 5
         docker logs gaianet
+        
+        # Ask about nodeid restoration after fresh installation
+        restore_nodeid
     else
         echo -e "${RED}Error during Gaia installation${NC}"
         return 1
     fi
 }
 
+# Function to get Gaia information
+get_gaia_info() {
+    echo -e "${BLUE}Getting Gaia information...${NC}"
+    
+    if ! docker ps --format '{{.Names}}' | grep -q "^gaianet$"; then
+        echo -e "${RED}Gaia container is not running. Please start it first.${NC}"
+        return 1
+    fi
+    
+    docker exec -it gaianet /root/gaianet/bin/gaianet info
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}Successfully retrieved Gaia information!${NC}"
+    else
+        echo -e "${RED}Error getting Gaia information${NC}"
+        return 1
+    fi
+}
+
+# Function to get GaiaNet address
 get_gaianet_address() {
     echo -e "${BLUE}Getting GaiaNet address from Docker logs...${NC}"
     local max_attempts=12
@@ -156,7 +267,7 @@ get_gaianet_address() {
     
     while [ $attempt -le $max_attempts ]; do
         echo -e "${BLUE}Attempt $attempt of $max_attempts to get GaiaNet address...${NC}"
-        ADDRESS=$(docker logs gaianet 2>&1 | grep "GaiaNet node is started at:" | grep -o "0x[a-fA-F0-9]\{40\}")
+        ADDRESS=$(docker logs gaianet 2>&1 | grep "GaiaNet node is started at:" | grep -o "0x[a-fA-F0-9]\{40\}" | tail -n 1)
         
         if [ -n "$ADDRESS" ]; then
             echo -e "${GREEN}Successfully found GaiaNet address: ${ADDRESS}${NC}"
@@ -172,6 +283,7 @@ get_gaianet_address() {
     return 1
 }
 
+# Function to get model name
 get_model_name() {
     echo -e "${BLUE}Extracting model name from Docker logs...${NC}"
     local max_attempts=12
@@ -195,25 +307,7 @@ get_model_name() {
     return 1
 }
 
-get_gaia_info() {
-    echo -e "${BLUE}Getting Gaia information...${NC}"
-    
-    # Check if container is running
-    if ! docker ps --format '{{.Names}}' | grep -q "^gaianet$"; then
-        echo -e "${RED}Gaia container is not running. Please start it first.${NC}"
-        return 1
-    fi
-    
-    docker exec -it gaianet /root/gaianet/bin/gaianet info
-    
-    if [ $? -eq 0 ]; then
-        echo -e "${GREEN}Successfully retrieved Gaia information!${NC}"
-    else
-        echo -e "${RED}Error getting Gaia information${NC}"
-        return 1
-    fi
-}
-
+# Function to install requirements
 install_requirements() {
     if [ ! -f "requirements.txt" ]; then
         echo -e "${RED}requirements.txt not found in current directory!${NC}"
@@ -231,6 +325,7 @@ install_requirements() {
     return 0
 }
 
+# Function to setup bot
 setup_bot() {
     echo -e "${BLUE}Setting up Gaia bot...${NC}"
     
@@ -265,28 +360,16 @@ setup_bot() {
     }
     
     if [ -f "sample.env" ]; then
-        cp sample.env .env
-        echo -e "${GREEN}Created .env file from sample.env${NC}"
+        # Create new .env with updated values
+        echo "API_URL=https://${ADDRESS}.us.gaianet.network/v1/chat/completions" > .env
+        echo "MODEL=Meta-Llama-3-8B-Instruct-Q5_K_M" >> .env
+        echo "DISCORD_WEBHOOK_URL=" >> .env
         
-        # Update API_URL in .env
-        if sed -i "s/0x[a-fA-F0-9]\{40\}/${ADDRESS}/" .env; then
-            echo -e "${GREEN}Successfully updated API_URL in .env with address: ${ADDRESS}${NC}"
-        else
-            echo -e "${RED}Failed to update API_URL in .env. Bot setup aborted.${NC}"
-            return 1
-        fi
-        
-        # Update MODEL in .env
-        if grep -q "^MODEL=" .env; then
-            sed -i "s/^MODEL=.*/MODEL=${MODEL_NAME}/" .env
-        else
-            echo "MODEL=${MODEL_NAME}" >> .env
-        fi
-        echo -e "${GREEN}Successfully updated MODEL in .env with: ${MODEL_NAME}${NC}"
+        echo -e "${GREEN}Successfully created and updated .env file${NC}"
         
         configure_discord_webhook
     else
-        echo -e "${RED}sample.env not found! Bot setup aborted.${NC}"
+        echo -e "${RED}sample.env not found! Bot setup aborted.
         return 1
     fi
     
