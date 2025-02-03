@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Set strict error handling
+set -euo pipefail
+
 # Function to check if a command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
@@ -26,7 +29,8 @@ setup_nvidia_container_runtime() {
             "runtimeArgs": []
         }
     }
-}EOF
+}
+EOF
 
     # Restart Docker to apply changes
     echo "Restarting Docker service..."
@@ -37,6 +41,8 @@ setup_nvidia_container_runtime() {
 
 # Function to check Docker container status
 check_docker_container() {
+    local choice
+
     # Check if docker is installed
     if ! command_exists docker; then
         echo "Docker is not installed. Please install Docker first."
@@ -63,8 +69,8 @@ check_docker_container() {
             case "$choice" in 
                 1)
                     echo "Stopping and removing existing container..."
-                    docker stop crynux_node
-                    docker rm crynux_node
+                    docker stop crynux_node || true
+                    docker rm crynux_node || true
                     return 0
                     ;;
                 2)
@@ -86,6 +92,8 @@ check_docker_container() {
 
 # Function to check monitor installation
 check_monitor_installation() {
+    local choice
+
     if [ -f "/etc/systemd/system/crynux-monitor.service" ]; then
         echo -e "\nCrynux Monitor service is already installed"
         echo "Choose an option:"
@@ -98,8 +106,8 @@ check_monitor_installation() {
             case "$choice" in 
                 1)
                     echo "Stopping and removing existing monitor service..."
-                    sudo systemctl stop crynux-monitor
-                    sudo systemctl disable crynux-monitor
+                    sudo systemctl stop crynux-monitor || true
+                    sudo systemctl disable crynux-monitor || true
                     sudo rm /etc/systemd/system/crynux-monitor.service
                     return 0
                     ;;
@@ -288,29 +296,30 @@ EOF
 }
 
 # Main script execution starts here
-mkdir -p crynux
-cd crynux
+main() {
+    mkdir -p crynux
+    cd crynux || exit 1
 
-# Setup NVIDIA Container Runtime
-setup_nvidia_container_runtime
+    # Setup NVIDIA Container Runtime
+    setup_nvidia_container_runtime
 
-# Check Docker container and get user choice first
-echo "Checking Docker container status..."
-check_docker_container
-proceed_with_install=$?
+    # Check Docker container and get user choice first
+    echo "Checking Docker container status..."
+    check_docker_container
+    proceed_with_install=$?
 
-# Then check Monitor installation
-echo "Checking monitor installation..."
-check_monitor_installation
-proceed_with_monitor=$?
+    # Then check Monitor installation
+    echo "Checking monitor installation..."
+    check_monitor_installation
+    proceed_with_monitor=$?
 
-# Setup Python and dependencies
-echo "Checking Python dependencies..."
-setup_python
+    # Setup Python and dependencies
+    echo "Checking Python dependencies..."
+    setup_python
 
-if [ $proceed_with_install -eq 0 ]; then
-    # Create docker-compose.yml
-    cat << EOF > docker-compose.yml
+    if [ $proceed_with_install -eq 0 ]; then
+        # Create docker-compose.yml
+        cat << EOF > docker-compose.yml
 ---
 version: "3.8"
 name: "crynux_node"
@@ -333,19 +342,19 @@ services:
               count: all
               capabilities: [gpu]
 EOF
-    echo "docker-compose.yml created successfully!"
-    
-    # Start the container
-    echo "Starting Crynux Node container..."
-    docker compose up -d
-fi
+        echo "docker-compose.yml created successfully!"
+        
+        # Start the container
+        echo "Starting Crynux Node container..."
+        docker compose up -d
+    fi
 
-if [ $proceed_with_monitor -eq 0 ]; then
-    # Create Python monitor script
-    create_python_monitor
+    if [ $proceed_with_monitor -eq 0 ]; then
+        # Create Python monitor script
+        create_python_monitor
 
-    # Create systemd service for monitoring
-    cat << EOF > /etc/systemd/system/crynux-monitor.service
+        # Create systemd service for monitoring
+        sudo tee /etc/systemd/system/crynux-monitor.service > /dev/null << EOF
 [Unit]
 Description=Crynux Node Monitor
 After=docker.service
@@ -361,29 +370,33 @@ WorkingDirectory=$(pwd)
 WantedBy=multi-user.target
 EOF
 
-    # Create configuration file
-    echo "Please enter your Discord webhook URL:"
-    read webhook_url
-    cat << EOF > config.json
+        # Create configuration file
+        echo "Please enter your Discord webhook URL:"
+        read -r webhook_url
+        cat << EOF > config.json
 {
     "webhook_url": "$webhook_url"
 }
 EOF
 
-    # Start monitoring service
-    echo "Starting monitoring service..."
-    sudo systemctl daemon-reload
-    sudo systemctl enable crynux-monitor
-    sudo systemctl start crynux-monitor
-    echo "Monitoring service started successfully"
-    echo "To check monitor status: sudo systemctl status crynux-monitor"
-    echo "To view monitor logs: sudo journalctl -u crynux-monitor -f"
-fi
+        # Start monitoring service
+        echo "Starting monitoring service..."
+        sudo systemctl daemon-reload
+        sudo systemctl enable crynux-monitor
+        sudo systemctl start crynux-monitor
+        echo "Monitoring service started successfully"
+        echo "To check monitor status: sudo systemctl status crynux-monitor"
+        echo "To view monitor logs: sudo journalctl -u crynux-monitor -f"
+    fi
 
-# Display access information
-echo -e "\nAccess Information:"
-echo "===================="
-ip addr show | grep "inet " | grep -v "127.0.0.1" | grep -v "docker" | grep -v "br-" | awk '{print $2}' | cut -d/ -f1 | while read -r ip; do
-    echo "http://$ip:7412"
-done
-echo "http://localhost:7412"
+    # Display access information
+    echo -e "\nAccess Information:"
+    echo "===================="
+    ip addr show | grep "inet " | grep -v "127.0.0.1" | grep -v "docker" | grep -v "br-" | awk '{print $2}' | cut -d/ -f1 | while read -r ip; do
+        echo "http://$ip:7412"
+    done
+    echo "http://localhost:7412"
+}
+
+# Execute main function
+main
