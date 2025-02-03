@@ -5,6 +5,36 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Function to setup NVIDIA Container Runtime
+setup_nvidia_container_runtime() {
+    # Check if nvidia-container-runtime is already installed
+    if ! command_exists nvidia-container-runtime; then
+        echo "Installing NVIDIA Container Runtime..."
+        sudo apt-get update
+        sudo apt-get install -y nvidia-container-runtime
+    fi
+
+    # Create Docker daemon configuration directory
+    sudo mkdir -p /etc/docker
+
+    # Create or update daemon.json with NVIDIA runtime
+    sudo tee /etc/docker/daemon.json > /dev/null <<EOF
+{
+    "runtimes": {
+        "nvidia": {
+            "path": "nvidia-container-runtime",
+            "runtimeArgs": []
+        }
+    }
+}EOF
+
+    # Restart Docker to apply changes
+    echo "Restarting Docker service..."
+    sudo systemctl restart docker
+    
+    echo "NVIDIA Container Runtime setup completed"
+}
+
 # Function to check Docker container status
 check_docker_container() {
     # Check if docker is installed
@@ -261,6 +291,9 @@ EOF
 mkdir -p crynux
 cd crynux
 
+# Setup NVIDIA Container Runtime
+setup_nvidia_container_runtime
+
 # Check Docker container and get user choice first
 echo "Checking Docker container status..."
 check_docker_container
@@ -285,6 +318,7 @@ services:
   crynux_node:
     image: ghcr.io/crynux-ai/crynux-node:latest
     container_name: crynux_node
+    runtime: nvidia 
     restart: unless-stopped
     ports:
       - "0.0.0.0:7412:7412"
