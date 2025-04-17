@@ -34,4 +34,11 @@ opsi cpu ada di 2 dan 5, menggunakan gpu ada di 134
 wget https://raw.githubusercontent.com/afiq-haekal/ez-install/refs/heads/main/gaia.sh && bash gaia.sh
 ```
 
+
+# DROSERA
+```
+wget https://raw.githubusercontent.com/afiq-haekal/ez-install/refs/heads/main/drosera.sh && bash drosera.sh
+```
+
+
 # note : bukan buat umum, kalo mau make pastiin addressnya ganti yh
